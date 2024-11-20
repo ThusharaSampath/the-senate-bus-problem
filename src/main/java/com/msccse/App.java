@@ -6,6 +6,8 @@ import java.util.concurrent.Semaphore;
 public class App {
     // Constants
     private static final int BUS_CAPACITY = 50;
+    private static long busArrivalMean;
+    private static long riderArrivalMean;
 
     // Shared variables
     private static int waitingRiders = 0;
@@ -22,6 +24,7 @@ public class App {
         public void run() {
             try {
                 while (true) {
+                    System.out.println("Bus (" + Thread.currentThread().getId() + ") arriving");
                     mutex.acquire();
 
                     if (waitingRiders == 0) {
@@ -49,7 +52,7 @@ public class App {
                         mutex.release();
                     }
                     // Simulate time between bus arrivals
-                    Thread.sleep(generateExponentialDelay(10000)); // 1000 milliseconds = 1 second
+                    Thread.sleep(generateExponentialDelay(busArrivalMean));
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -60,16 +63,19 @@ public class App {
     // Rider thread class
     static class Rider extends Thread {
         public void run() {
+            System.out.println("Riders (" + Thread.currentThread().getId() + ") arriving");
             try {
-                mutex.acquire();
+
 
                 // Check if bus is currently boarding
                 if (boarding) {
+                    mutex.acquire();
                     // If bus is boarding, this rider must wait for next bus
                     waitingRiders++;
                     System.out.println("Bus (" + Thread.currentThread().getId() + ") is boarding. Rider (" + Thread.currentThread().getId() + ") waiting for the next bus.");
                     mutex.release();
                 } else {
+                    mutex.acquire();
                     waitingRiders++;
                     mutex.release();
 
@@ -102,7 +108,7 @@ public class App {
         if (ridersCount == 0) {
             System.out.println("Bus (" + Thread.currentThread().getId() + ") is departing immediately.");
         } else {
-            System.out.println("Bus (" + Thread.currentThread().getId() + ")is departing with " + ridersCount + " riders.");
+            System.out.println("Bus (" + Thread.currentThread().getId() + ") is departing with " + ridersCount + " riders.");
         }
     }
 
@@ -111,6 +117,19 @@ public class App {
     }
 
     public static void main(String[] args) {
+        if (args.length < 2) {
+            System.out.println("Usage: java App <busArrivalMean> <riderArrivalMean>");
+            System.exit(1);
+        }
+
+        try {
+            busArrivalMean = Long.parseLong(args[0]);
+            riderArrivalMean = Long.parseLong(args[1]);
+        } catch (NumberFormatException e) {
+            System.out.println("Invalid input. Both arguments must be valid integers representing milliseconds.");
+            System.exit(1);
+        }
+
         Bus busThread = new Bus();
         busThread.start();
 
@@ -121,7 +140,7 @@ public class App {
 
             try {
                 // Simulate time between rider arrivals
-                Thread.sleep(generateExponentialDelay(100));
+                Thread.sleep(generateExponentialDelay(riderArrivalMean));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
