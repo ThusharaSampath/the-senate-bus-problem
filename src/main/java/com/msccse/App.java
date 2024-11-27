@@ -78,7 +78,7 @@ public class App {
     }
 
     // Helpers
-    private static long generateExponentialDelay(long mean) {
+    static long generateExponentialDelay(long mean) {
         Random random = new Random();
         return (long) (-Math.log(1 - random.nextDouble()) * mean);
     }
@@ -92,7 +92,7 @@ public class App {
         }
     }
 
-    private static void boardBus() {
+    static void boardBus() {
         System.out.println("Rider (" + Thread.currentThread().getId() + ") boarding.");
     }
 
