@@ -11,28 +11,23 @@ public class App {
 
     // Shared variables
     private static int waitingRiders = 0;
-    private static int boardedRiders = 0;
-    private static boolean boarding = false;
 
     // Synchronization variables
-    private static Semaphore mutex = new Semaphore(1);
-    private static Semaphore allowBoarding = new Semaphore(0);
-    private static Semaphore allBoarded = new Semaphore(0);
+    private static Semaphore busStopMutex = new Semaphore(1, true);
+    private static Semaphore allowBoarding = new Semaphore(0, true);
+    private static Semaphore allBoarded = new Semaphore(0, true);
 
-    // Bus thread class
     static class Bus extends Thread {
         public void run() {
             try {
                 while (true) {
-                    System.out.println("Bus (" + Thread.currentThread().getId() + ") arriving");
-                    mutex.acquire();
+                    busStopMutex.acquire();
 
                     if (waitingRiders == 0) {
                         // No riders, bus departs immediately
                         depart(0);
-                        mutex.release();
+                        busStopMutex.release();
                     } else {
-                        boarding = true;
                         int ridersToBoard = Math.min(waitingRiders, BUS_CAPACITY);
                         System.out.println("Bus arrived. Riders waiting: " + waitingRiders +
                                 ", Boarding: " + ridersToBoard);
@@ -42,16 +37,12 @@ public class App {
 
                         // Wait for all riders to board
                         allBoarded.acquire();
-                        depart(ridersToBoard);
 
-                        // Reset boarding and counters
-                        boarding = false;
                         waitingRiders -= ridersToBoard;
-                        boardedRiders = 0;
-
-                        mutex.release();
+                        busStopMutex.release();
+                        depart(ridersToBoard);
                     }
-                    // Simulate time between bus arrivals
+                    // Simulate time between rider arrivals
                     Thread.sleep(generateExponentialDelay(busArrivalMean));
                 }
             } catch (InterruptedException e) {
@@ -63,36 +54,24 @@ public class App {
     // Rider thread class
     static class Rider extends Thread {
         public void run() {
-            System.out.println("Riders (" + Thread.currentThread().getId() + ") arriving");
             try {
+                System.out.println("Riders (" + Thread.currentThread().getId() + ")  waiting to enter bus stop");
+                busStopMutex.acquire();
+                waitingRiders++;
+                busStopMutex.release();
+                System.out.println("Riders (" + Thread.currentThread().getId() + ")  entered bus stop");
+                allowBoarding.acquire();
 
-
-                // Check if bus is currently boarding
-                if (boarding) {
-                    mutex.acquire();
-                    // If bus is boarding, this rider must wait for next bus
-                    waitingRiders++;
-                    System.out.println("Bus (" + Thread.currentThread().getId() + ") is boarding. Rider (" + Thread.currentThread().getId() + ") waiting for the next bus.");
-                    mutex.release();
-                } else {
-                    mutex.acquire();
-                    waitingRiders++;
-                    mutex.release();
-
-                    // Wait for bus to arrive and allow boarding
-                    allowBoarding.acquire();
-
-                    // Board the bus
-                    boardBus();
-                    boardedRiders++;
-
-                    // Check if all boarded
-                    if (boardedRiders == Math.min(waitingRiders, BUS_CAPACITY)) {
-                        allBoarded.release();
-                    }
+                boardBus();
+                if (allowBoarding.availablePermits() == 0) {
+                    allBoarded.release();
                 }
 
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                // cleanup threads and release mutex
+                busStopMutex.release();
                 Thread.currentThread().interrupt();
             }
         }
@@ -106,9 +85,10 @@ public class App {
 
     private static void depart(int ridersCount) {
         if (ridersCount == 0) {
-            System.out.println("Bus (" + Thread.currentThread().getId() + ") is departing immediately.");
+            System.out.println("No Riders, Bus is departing immediately.");
         } else {
-            System.out.println("Bus (" + Thread.currentThread().getId() + ") is departing with " + ridersCount + " riders.");
+            System.out.println(
+                    "Bus is departing with " + ridersCount + " riders.");
         }
     }
 
